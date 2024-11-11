@@ -45,7 +45,7 @@ Using it, Step 1:
   to split chapters. Here's an example of a disc with 6 episodes of a TV
   show, plus a "bump", all stored as a single title.
 
-    $ dvdrip --scan /dev/cdrom
+    $ dvdrip --scan -i /dev/cdrom
     Reading from '/media/EXAMPLE1'
     Title   1/  1: 02:25:33  720×576  4:3   25 fps
       audio   1: Chinese (5.1ch)  [48000Hz, 448000bps]
@@ -102,7 +102,7 @@ Using it, Step 2:
 
   If you've decided to split by chapter, execute:
 
-    dvdrip.py -c /dev/cdrom -o Output_Name
+    dvdrip.py -c -i /dev/cdrom -o Output_Name
 
   Otherwise, leave out the -c flag.
 
@@ -121,6 +121,7 @@ Limitations:
 # 1-99)
 # TODO: Deal with failed scan of first title better.
 
+import ctypes
 import argparse
 import os
 import re
@@ -131,7 +132,7 @@ import time
 
 from pprint import pprint
 from collections import namedtuple
-from fractions import gcd
+from math import gcd
 
 
 class UserError(Exception):
@@ -152,7 +153,8 @@ def check_err(*popenargs, **kwargs):
     return stderr.decode(CHAR_ENCODING, 'replace')
 
 def check_output(*args, **kwargs):
-    return subprocess.check_output(*args, **kwargs).decode(CHAR_ENCODING)
+    s = subprocess.check_output(*args, **kwargs).decode(CHAR_ENCODING)
+    return s.replace(os.linesep, '\n')
 
 HANDBRAKE = 'HandBrakeCLI'
 
@@ -291,7 +293,7 @@ class DVD:
         args = [
             HANDBRAKE,
             '--title', str(task.title.number),
-            '--preset', "High Profile",
+            '--preset', "Production Standard",
             '--encoder', 'x264',
             '--audio', ','.join(audio_tracks),
             '--aencoder', ','.join(audio_encoders),
@@ -328,7 +330,7 @@ class DVD:
             '--scan',
             '--title', str(i),
             '-i',
-            self.mountpoint], stdout=subprocess.PIPE).split('\n'):
+            self.mountpoint], stdout=subprocess.PIPE).split(os.linesep):
                 if self.verbose:
                         print('< %s' % line.rstrip())
                 yield line
@@ -370,6 +372,14 @@ class DVD:
                         warn("Cannot parse scan of title %d." % i)
 
     def Eject(self):
+        if os.name == 'nt':
+            if len(self.mountpoint) < 4 and self.mountpoint[1] == ':':
+                # mountpoint is only a drive letter like "F:" or "F:\" not a subdirectory
+                drive_letter = self.mountpoint[0]
+                ctypes.windll.WINMM.mciSendStringW("open %s: type CDAudio alias %s_drive" % (drive_letter, drive_letter), None, 0, None)
+                ctypes.windll.WINMM.mciSendStringW("set %s_drive door open" % drive_letter, None, 0, None)
+            return
+
         # TODO: this should really be a while loop that terminates once a
         # deadline is met.
         for i in range(TOTAL_EJECT_SECONDS * EJECT_ATTEMPTS_PER_SECOND):
@@ -599,7 +609,7 @@ def ParseArgs():
             help="""Comma-separated list of title numbers to consider
             (starting at 1) or * for all titles.""")
     parser.add_argument('-i', '--input',
-            help="Volume to rip (must be a directory).")
+            help="Volume to rip (must be a directory).", required=True)
     parser.add_argument('-o', '--output',
             help="""Output location. Extension is added if only one title
             being ripped, otherwise, a directory will be created to contain
