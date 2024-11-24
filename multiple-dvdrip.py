@@ -1,12 +1,21 @@
-import os
-from dvdrip import DVD, ConstructTasks, TaskFilenames, PerformTasks
 import argparse
-from pathlib import Path
-from tqdm import tqdm
 import subprocess
+from pathlib import Path
+
+from tqdm import tqdm
+
+from dvdrip import DVD, ConstructTasks, TaskFilenames
 
 
-def main(input_folder: Path, output_folder: Path, chapter_split: bool, dry_run: bool = False, verbose: bool = False):
+def main(
+    input_folder: Path,
+    output_folder: Path,
+    first_audio: str | None = None,
+    *,
+    chapter_split: bool = False,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
     dvd_dict = {
         str(ifo.parent.relative_to(input_folder)): {
             "input_folder": ifo.parent,
@@ -25,7 +34,7 @@ def main(input_folder: Path, output_folder: Path, chapter_split: bool, dry_run: 
             continue
         tasks = tuple(ConstructTasks(titles, chapter_split=chapter_split))
         filenames = TaskFilenames(tasks, dvd_data["output_folder"], dry_run=True)
-        for task, filename in zip(tasks, filenames):
+        for task, filename in zip(tasks, filenames, strict=False):
             if not (filename := Path(filename)).is_file():
                 dvd_data.setdefault("tasks_filenames", []).append((task, filename))
 
@@ -44,7 +53,9 @@ def main(input_folder: Path, output_folder: Path, chapter_split: bool, dry_run: 
                         if verbose:
                             print(f"Deleting temporary file {tmp_name}")
                         tmp_name.unlink()
-                dvd_data["dvd"].RipTitle(task, str(tmp_name), dry_run=dry_run, verbose=verbose)
+                dvd_data["dvd"].RipTitle(
+                    task, str(tmp_name), first_audio=first_audio, dry_run=dry_run, verbose=verbose
+                )
                 if dry_run:
                     if verbose:
                         print(f"Would rename temporary file {tmp_name} to {filename}")
@@ -60,6 +71,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Rip all DVDs files in a folder")
     parser.add_argument("input_folder", help="The folder where the DVD files are located", type=Path)
     parser.add_argument("output_folder", help="The folder where the ripped files will be saved", type=Path)
+    parser.add_argument("--first-audio", help="The native language of the DVD", type=str)
     parser.add_argument("--chapter-split", help="Split the ripped files by chapter", action="store_true")
     parser.add_argument("--dry-run", help="Don't actually rip the files", action="store_true")
     parser.add_argument("--verbose", help="Print more information", action="store_true")
@@ -68,6 +80,7 @@ if __name__ == "__main__":
     main(
         input_folder=args.input_folder,
         output_folder=args.output_folder,
+        first_audio=args.first_audio,
         chapter_split=args.chapter_split,
         dry_run=args.dry_run,
     )

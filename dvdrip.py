@@ -293,14 +293,24 @@ class DVD:
         self.mountpoint = mountpoint
         self.verbose = verbose
 
-    def RipTitle(self, task, output, dry_run, verbose) -> None:
+    def RipTitle(
+        self, task: Task, output: str, first_audio: str | None = None, *, dry_run: bool, verbose: bool
+    ) -> None:
         if verbose:
             print("Title Scan:")
             pprint(task.title.info)
             print("-" * 78)
 
-        audio_tracks = task.title.info["audio tracks"].keys()
-        audio_encoders = ["faac"] * len(audio_tracks)
+        audio_tracks = task.title.info["audio tracks"]
+        audio_tracks = {
+            value.iso639_2: id_ for id_, value in zip(audio_tracks.keys(), ParseAudioTracks(audio_tracks), strict=False)
+        }
+        audio_keys = []
+        if first_audio and first_audio in audio_tracks:
+            audio_keys.append(audio_tracks.pop(first_audio))
+        audio_keys += audio_tracks.values()
+
+        audio_encoders = ["ca_aac"] * len(audio_tracks)
         subtitles = task.title.info["subtitle tracks"].keys()
 
         args = [
@@ -312,7 +322,7 @@ class DVD:
             "--encoder",
             "x264",
             "--audio",
-            ",".join(audio_tracks),
+            ",".join(audio_keys),
             "--aencoder",
             ",".join(audio_encoders),
         ]
@@ -478,17 +488,15 @@ def TaskFilenames(tasks, output, dry_run=False):
 
 
 def PerformTasks(dvd, tasks, title_count, filenames, dry_run=False, verbose=False) -> None:
-    for task, filename in zip(tasks, filenames):
+    for task, filename in zip(tasks, filenames, strict=False):
         print("=" * 78)
         if task.chapter is None:
             print(f"Title {task.title.number} / {title_count} => {filename!r}")
         else:
             num_chapters = len(task.title.info["chapters"])
-            print(
-                f"Title {task.title.number} / {title_count} , Chapter {task.chapter} / {num_chapters}=> {filename!r}"
-            )
+            print(f"Title {task.title.number} / {title_count} , Chapter {task.chapter} / {num_chapters}=> {filename!r}")
         print("-" * 78)
-        dvd.RipTitle(task, filename, dry_run, verbose)
+        dvd.RipTitle(task, filename, dry_run=dry_run, verbose=verbose)
 
 
 Size = namedtuple("Size", ["width", "height", "pix_aspect_width", "pix_aspect_height", "fps"])
@@ -504,7 +512,7 @@ SIZE_CTORS = [int] * 4 + [float]
 
 
 def ParseSize(s):
-    return Size(*(f(x) for f, x in zip(SIZE_CTORS, SIZE_REGEX.match(s).groups())))
+    return Size(*(f(x) for f, x in zip(SIZE_CTORS, SIZE_REGEX.match(s).groups(), strict=False)))
 
 
 def ComputeAspectRatio(size):
@@ -544,9 +552,7 @@ def ParseChapters(d):
 
 AUDIO_TRACK_REGEX = re.compile(r"^(\S+)\s*((?:\([^)]*\)\s*)*)(?:,\s*(.*))?$")
 
-AUDIO_TRACK_FIELD_REGEX = re.compile(
-    r"^\(([^)]*)\)\s*\(([^)]*?)\s*ch\)\s*" + r"((?:\([^()]*\)\s*)*)\(iso639-2:\s*([^)]+)\)$"
-)
+AUDIO_TRACK_FIELD_REGEX = re.compile(r"^\(([^,]*),\s*([^,]*?)\s*ch,\s*((?:[^)]*\)\s*)*)\(iso639-2:\s*([^)]+)\)$")
 
 AudioTrack = namedtuple("AudioTrack", "number lang codec channels iso639_2 extras")
 
