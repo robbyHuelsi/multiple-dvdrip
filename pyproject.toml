@@ -1,0 +1,32 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "ALL"
+]
+
+ignore = [
+    "COM812", # missing-trailing-comma (incompatible with ruff format)
+    "D202", # no-blank-line-after-function (looks stupid)
+    "D203", # one-blank-line-before-class
+    "D212", # multi-line-summary-first-line
+    "ERA001", # commented-out-code: Incompatible with ruff format
+    "G004", # logging-f-string: Allow f-strings in logging calls.
+    "ISC001", # does not work with ruff format
+    "N812", # lowercase-imported-as-non-lowercase: Allow to follow torch conventions
+    "PD002", # pandas-use-of-inplace-argument
+    "PLR2004", # magic-value-comparison: Too sensitive, as it flagged all comparisons with any number.
+    "RET504", # unnecessary-assign Allow since it makes code more readable in some cases.
+    "S101", # assert: Allow to use assertions in code
+    "S607", # start-process-with-partial-path: Judged as unnecessary constraint
+    "SIM108", # if-else-block-instead-of-if-exp: Code becomes less readable in many cases
+    "T201", # print: Allow print statements
+    "T203", # print: Allow pprint statements
+    "TCH001", # typing-only-first-party-import: Allow since this requires future imports and often makes code less readable
+    "TCH002", # typing-only-third-party-import: Allow since this requires future imports and often makes code less readable
+    "TCH003", # typing-only-standard-library-import: Allow since this requires future imports and often makes code less readable
+    "TRY300", # try-consider-else: Allow to return directly from try
+    "UP007", # Replacing Union[X, Y] with X | Y is not always safe since for some types | is not valid
+    "UP038", # Replacing (X, Y) in isinstance with X | Y is not always safe since for some types | is not valid
+]

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# coding=utf-8
 
 """
 Rip DVDs quickly and easily from the commandline.
@@ -121,25 +120,24 @@ Limitations:
 # 1-99)
 # TODO: Deal with failed scan of first title better.
 
-import ctypes
 import argparse
+import ctypes
 import os
 import re
 import stat
 import subprocess
 import sys
 import time
-
-from pprint import pprint
 from collections import namedtuple
 from math import gcd
+from pprint import pprint
 
 
 class UserError(Exception):
-    def __init__(self, message):
+    def __init__(self, message) -> None:
         self.message = message
 
-CHAR_ENCODING = 'UTF-8'
+CHAR_ENCODING = "UTF-8"
 
 def check_err(*popenargs, **kwargs):
     process = subprocess.Popen(stderr=subprocess.PIPE, *popenargs, **kwargs)
@@ -150,17 +148,17 @@ def check_err(*popenargs, **kwargs):
         if cmd is None:
             cmd = popenargs[0]
         raise subprocess.CalledProcessError(retcode, cmd, output=stderr)
-    return stderr.decode(CHAR_ENCODING, 'replace')
+    return stderr.decode(CHAR_ENCODING, "replace")
 
 def check_output(*args, **kwargs):
     s = subprocess.check_output(*args, **kwargs).decode(CHAR_ENCODING)
-    return s.replace(os.linesep, '\n')
+    return s.replace(os.linesep, "\n")
 
-HANDBRAKE = 'HandBrakeCLI'
+HANDBRAKE = "HandBrakeCLI"
 
 TITLE_COUNT_REGEXES = [
-        re.compile(r'^Scanning title \d+ of (\d+)\.\.\.$'),
-        re.compile(r'^\[\d\d:\d\d:\d\d] scan: DVD has (\d+) title\(s\)$'),
+        re.compile(r"^Scanning title \d+ of (\d+)\.\.\.$"),
+        re.compile(r"^\[\d\d:\d\d:\d\d] scan: DVD has (\d+) title\(s\)$"),
 ]
 
 def FindTitleCount(scan, verbose):
@@ -173,18 +171,18 @@ def FindTitleCount(scan, verbose):
     if verbose:
         for line in scan:
             print(line)
-    raise AssertionError("Can't find TITLE_COUNT_REGEX in scan")
+    msg = "Can't find TITLE_COUNT_REGEX in scan"
+    raise AssertionError(msg)
 
 
-STRUCTURED_LINE_RE = re.compile(r'( *)\+ (([a-z0-9 ]+):)?(.*)')
+STRUCTURED_LINE_RE = re.compile(r"( *)\+ (([a-z0-9 ]+):)?(.*)")
 
 def ExtractTitleScan(scan):
     result = []
     in_title_scan = False
     for line in scan:
-        if not in_title_scan:
-            if line.startswith('+'):
-                in_title_scan = True
+        if not in_title_scan and line.startswith("+"):
+            in_title_scan = True
         if in_title_scan:
             m = STRUCTURED_LINE_RE.match(line)
             if m:
@@ -194,9 +192,9 @@ def ExtractTitleScan(scan):
     return tuple(result)
 
 
-TRACK_VALUE_RE = re.compile(r'(\d+), (.*)')
+TRACK_VALUE_RE = re.compile(r"(\d+), (.*)")
 
-def MassageTrackData(node, key):
+def MassageTrackData(node, key) -> None:
     if key in node:
         track_data = node[key]
         if type(track_data) is list:
@@ -214,8 +212,8 @@ def ParseTitleScan(scan):
     # tracks" and "subtitle tracks" nodes, so we "massage" these parsed
     # nodes to get a consistent parsed reperesentation.
     for value in result.values():
-        MassageTrackData(value, 'audio tracks')
-        MassageTrackData(value, 'subtitle tracks')
+        MassageTrackData(value, "audio tracks")
+        MassageTrackData(value, "subtitle tracks")
     return result
 
 def ParseTitleScanHelper(scan, pos, indent):
@@ -244,7 +242,7 @@ def ParseNode(scan, pos, indent):
     spaces = len(spaces) / 2
     if spaces < indent:
         return pos, None
-    assert spaces == indent, '%d <> %r' % (indent, line)
+    assert spaces == indent, "%d <> %r" % (indent, line)
     pos += 1
     if colon:
         if value:
@@ -265,58 +263,59 @@ def only(iterable):
     result, = iterable
     return result
 
-Title = namedtuple('Title', ['number', 'info'])
-Task = namedtuple('Task', ['title', 'chapter'])
+Title = namedtuple("Title", ["number", "info"])
+Task = namedtuple("Task", ["title", "chapter"])
 
 TOTAL_EJECT_SECONDS = 5
 EJECT_ATTEMPTS_PER_SECOND = 10
 
 class DVD:
-    def __init__(self, mountpoint, verbose, mount_timeout=0):
+    def __init__(self, mountpoint, verbose, mount_timeout=0) -> None:
         if stat.S_ISBLK(os.stat(mountpoint).st_mode):
             mountpoint = FindMountPoint(mountpoint, mount_timeout)
         if not os.path.isdir(mountpoint):
-            raise UserError('%r is not a directory' % mountpoint)
+            msg = f"{mountpoint!r} is not a directory"
+            raise UserError(msg)
         self.mountpoint = mountpoint
         self.verbose = verbose
 
-    def RipTitle(self, task, output, dry_run, verbose):
+    def RipTitle(self, task, output, dry_run, verbose) -> None:
         if verbose:
-            print('Title Scan:')
+            print("Title Scan:")
             pprint(task.title.info)
-            print('-' * 78)
+            print("-" * 78)
 
-        audio_tracks = task.title.info['audio tracks'].keys()
-        audio_encoders = ['faac'] * len(audio_tracks)
-        subtitles = task.title.info['subtitle tracks'].keys()
+        audio_tracks = task.title.info["audio tracks"].keys()
+        audio_encoders = ["faac"] * len(audio_tracks)
+        subtitles = task.title.info["subtitle tracks"].keys()
 
         args = [
             HANDBRAKE,
-            '--title', str(task.title.number),
-            '--preset', "Production Standard",
-            '--encoder', 'x264',
-            '--audio', ','.join(audio_tracks),
-            '--aencoder', ','.join(audio_encoders),
+            "--title", str(task.title.number),
+            "--preset", "Production Standard",
+            "--encoder", "x264",
+            "--audio", ",".join(audio_tracks),
+            "--aencoder", ",".join(audio_encoders),
         ]
         if task.chapter is not None:
             args += [
-                '--chapters', str(task.chapter),
+                "--chapters", str(task.chapter),
             ]
         if subtitles:
             args += [
-                '--subtitle', ','.join(subtitles),
+                "--subtitle", ",".join(subtitles),
             ]
         args += [
-            '--markers',
-            '--optimize',
+            "--markers",
+            "--optimize",
             #'--no-dvdnav', # TODO: turn this on as a fallback
-            '--input', self.mountpoint,
-            '--output', output,
+            "--input", self.mountpoint,
+            "--output", output,
         ]
         if verbose:
-            print(' '.join(('\n  ' + a)
-                if a.startswith('-') else a for a in args))
-            print('-' * 78)
+            print(" ".join(("\n  " + a)
+                if a.startswith("-") else a for a in args))
+            print("-" * 78)
         if not dry_run:
             if verbose:
                 subprocess.call(args)
@@ -327,29 +326,27 @@ class DVD:
         for line in check_err([
             HANDBRAKE,
             #'--no-dvdnav', # TODO: turn this on as a fallback
-            '--scan',
-            '--title', str(i),
-            '-i',
+            "--scan",
+            "--title", str(i),
+            "-i",
             self.mountpoint], stdout=subprocess.PIPE).split(os.linesep):
                 if self.verbose:
-                        print('< %s' % line.rstrip())
+                        print(f"< {line.rstrip()}")
                 yield line
 
     def ScanTitles(self, title_numbers, verbose):
-        """
-        Returns an iterable of parsed titles.
-        """
+        """Returns an iterable of parsed titles."""
         first = title_numbers[0] if title_numbers else 1
         raw_scan = tuple(self.ScanTitle(first))
         title_count = FindTitleCount(raw_scan, verbose)
-        print('Disc claims to have %d titles.' % title_count)
+        print("Disc claims to have %d titles." % title_count)
         title_name, title_info = only(
                 ParseTitleScan(ExtractTitleScan(raw_scan)).items())
         del raw_scan
 
         def MakeTitle(name, number, info):
-            assert ('title %d' % number) == name
-            info['duration'] = ExtractDuration('duration ' + info['duration'])
+            assert ("title %d" % number) == name
+            info["duration"] = ExtractDuration("duration " + info["duration"])
             return Title(number, info)
 
         yield MakeTitle(title_name, first, title_info)
@@ -361,7 +358,7 @@ class DVD:
         for i in to_scan:
                 try:
                     scan = ExtractTitleScan(self.ScanTitle(i))
-                except subprocess.CalledProcessError as exc:
+                except subprocess.CalledProcessError:
                     warn("Cannot scan title %d." % i)
                 else:
                     title_info_names = ParseTitleScan(scan).items()
@@ -371,36 +368,36 @@ class DVD:
                     else:
                         warn("Cannot parse scan of title %d." % i)
 
-    def Eject(self):
-        if os.name == 'nt':
-            if len(self.mountpoint) < 4 and self.mountpoint[1] == ':':
+    def Eject(self) -> None:
+        if os.name == "nt":
+            if len(self.mountpoint) < 4 and self.mountpoint[1] == ":":
                 # mountpoint is only a drive letter like "F:" or "F:\" not a subdirectory
                 drive_letter = self.mountpoint[0]
-                ctypes.windll.WINMM.mciSendStringW("open %s: type CDAudio alias %s_drive" % (drive_letter, drive_letter), None, 0, None)
-                ctypes.windll.WINMM.mciSendStringW("set %s_drive door open" % drive_letter, None, 0, None)
+                ctypes.windll.WINMM.mciSendStringW(f"open {drive_letter}: type CDAudio alias {drive_letter}_drive", None, 0, None)
+                ctypes.windll.WINMM.mciSendStringW(f"set {drive_letter}_drive door open", None, 0, None)
             return
 
         # TODO: this should really be a while loop that terminates once a
         # deadline is met.
-        for i in range(TOTAL_EJECT_SECONDS * EJECT_ATTEMPTS_PER_SECOND):
-            if not subprocess.call(['eject', self.mountpoint]):
+        for _i in range(TOTAL_EJECT_SECONDS * EJECT_ATTEMPTS_PER_SECOND):
+            if not subprocess.call(["eject", self.mountpoint]):
                 return
             time.sleep(1.0 / EJECT_ATTEMPTS_PER_SECOND)
 
 def ParseDuration(s):
     result = 0
-    for field in s.strip().split(':'):
+    for field in s.strip().split(":"):
         result *= 60
         result += int(field)
     return result
 
 def FindMountPoint(dev, timeout):
-    regex = re.compile(r'^' + re.escape(os.path.realpath(dev)) + r'\b')
+    regex = re.compile(r"^" + re.escape(os.path.realpath(dev)) + r"\b")
 
     now = time.time()
     end_time = now + timeout
     while end_time >= now:
-        for line in check_output(['df', '-P']).split('\n'):
+        for line in check_output(["df", "-P"]).split("\n"):
             m = regex.match(line)
             if m:
                 line = line.split(None, 5)
@@ -408,21 +405,22 @@ def FindMountPoint(dev, timeout):
                     return line[-1]
         time.sleep(0.1)
         now = time.time()
-    raise UserError('%r not mounted.' % dev)
+    msg = f"{dev!r} not mounted."
+    raise UserError(msg)
 
-def FindMainFeature(titles, verbose=False):
+def FindMainFeature(titles, verbose=False) -> None:
     if verbose:
-        print('Attempting to determine main feature of %d titles...'
+        print("Attempting to determine main feature of %d titles..."
                 % len(titles))
     main_feature = max(titles,
-            key=lambda title: ParseDuration(title.info['duration']))
+            key=lambda title: ParseDuration(title.info["duration"]))
     if verbose:
-        print('Selected %r as main feature.' % main_feature.number)
+        print(f"Selected {main_feature.number!r} as main feature.")
         print()
 
 def ConstructTasks(titles, chapter_split):
     for title in titles:
-        num_chapters = len(title.info['chapters'])
+        num_chapters = len(title.info["chapters"])
         if chapter_split and num_chapters > 1:
             for chapter in range(1, num_chapters + 1):
                 yield Task(title, chapter)
@@ -434,44 +432,41 @@ def TaskFilenames(tasks, output, dry_run=False):
         def ComputeFileName(task):
             if task.chapter is None:
                 return os.path.join(output,
-                        'Title%02d.mp4' % task.title.number)
-            else:
-                return os.path.join(output,
-                        'Title%02d_%02d.mp4'
-                        % (task.title.number, task.chapter))
+                        "Title%02d.mp4" % task.title.number)
+            return os.path.join(output,
+                    "Title%02d_%02d.mp4"
+                    % (task.title.number, task.chapter))
         if not dry_run:
             os.makedirs(output)
     else:
-        def ComputeFileName(task):
-            return '%s.mp4' % output
+        def ComputeFileName(task) -> str:
+            return f"{output}.mp4"
     result = [ComputeFileName(task) for task in tasks]
     if len(set(result)) != len(result):
-        raise UserError("multiple tasks use same filename")
+        msg = "multiple tasks use same filename"
+        raise UserError(msg)
     return result
 
 def PerformTasks(dvd, tasks, title_count, filenames,
-        dry_run=False, verbose=False):
+        dry_run=False, verbose=False) -> None:
     for task, filename in zip(tasks, filenames):
-        print('=' * 78)
+        print("=" * 78)
         if task.chapter is None:
-            print('Title %s / %s => %r'
-                    % (task.title.number, title_count, filename))
+            print(f"Title {task.title.number} / {title_count} => {filename!r}")
         else:
-            num_chapters = len(task.title.info['chapters'])
-            print('Title %s / %s , Chapter %s / %s=> %r'
-                    % (task.title.number, title_count, task.chapter,
-                        num_chapters, filename))
-        print('-' * 78)
+            num_chapters = len(task.title.info["chapters"])
+            print(f"Title {task.title.number} / {title_count} , Chapter {task.chapter} / {num_chapters}=> {filename!r}")
+        print("-" * 78)
         dvd.RipTitle(task, filename, dry_run, verbose)
 
-Size = namedtuple('Size',
-        ['width', 'height', 'pix_aspect_width', 'pix_aspect_height', 'fps'])
+Size = namedtuple("Size",
+        ["width", "height", "pix_aspect_width", "pix_aspect_height", "fps"])
 
 SIZE_REGEX = re.compile(
-    r'^\s*(\d+)x(\d+),\s*'
-    r'pixel aspect: (\d+)/(\d+),\s*'
-    r'display aspect: (?:\d+(?:\.\d+)),\s*'
-    r'(\d+(?:\.\d+)) fps\s*$')
+    r"^\s*(\d+)x(\d+),\s*"
+    r"pixel aspect: (\d+)/(\d+),\s*"
+    r"display aspect: (?:\d+(?:\.\d+)),\s*"
+    r"(\d+(?:\.\d+)) fps\s*$")
 
 SIZE_CTORS = [int] * 4 + [float]
 
@@ -486,11 +481,11 @@ def ComputeAspectRatio(size):
     return (w // d, h // d)
 
 DURATION_REGEX = re.compile(
-        r'^(?:.*,)?\s*duration\s+(\d\d):(\d\d):(\d\d)\s*(?:,.*)?$')
+        r"^(?:.*,)?\s*duration\s+(\d\d):(\d\d):(\d\d)\s*(?:,.*)?$")
 
-class Duration(namedtuple('Duration', 'hours minutes seconds')):
-    def __str__(self):
-        return '%02d:%02d:%02d' % (self)
+class Duration(namedtuple("Duration", "hours minutes seconds")):
+    def __str__(self) -> str:
+        return "%02d:%02d:%02d" % (self)
 
     def in_seconds(self):
         return 60 * (60 * self.hours + self.minutes) + self.seconds
@@ -498,7 +493,7 @@ class Duration(namedtuple('Duration', 'hours minutes seconds')):
 def ExtractDuration(s):
     return Duration(*map(int, DURATION_REGEX.match(s).groups()))
 
-Chapter = namedtuple('Chapter', 'number duration')
+Chapter = namedtuple("Chapter", "number duration")
 
 def ParseChapters(d):
     """
@@ -506,21 +501,21 @@ def ParseChapters(d):
 
     Result will be an iterable of Chapter objects, sorted by number.
     """
-    for number, info in sorted(((int(n), info) for (n, info) in d.items())):
+    for number, info in sorted((int(n), info) for (n, info) in d.items()):
         yield Chapter(number, ExtractDuration(info))
 
 AUDIO_TRACK_REGEX = re.compile(
-        r'^(\S+)\s*((?:\([^)]*\)\s*)*)(?:,\s*(.*))?$')
+        r"^(\S+)\s*((?:\([^)]*\)\s*)*)(?:,\s*(.*))?$")
 
 AUDIO_TRACK_FIELD_REGEX = re.compile(
-        r'^\(([^)]*)\)\s*\(([^)]*?)\s*ch\)\s*' +
-        r'((?:\([^()]*\)\s*)*)\(iso639-2:\s*([^)]+)\)$')
+        r"^\(([^)]*)\)\s*\(([^)]*?)\s*ch\)\s*" +
+        r"((?:\([^()]*\)\s*)*)\(iso639-2:\s*([^)]+)\)$")
 
-AudioTrack = namedtuple('AudioTrack',
-        'number lang codec channels iso639_2 extras')
+AudioTrack = namedtuple("AudioTrack",
+        "number lang codec channels iso639_2 extras")
 
 def ParseAudioTracks(d):
-    for number, info in sorted(((int(n), info) for (n, info) in d.items())):
+    for number, info in sorted((int(n), info) for (n, info) in d.items()):
         m = AUDIO_TRACK_REGEX.match(info)
         if m:
             lang, field_string, extras = m.groups()
@@ -532,128 +527,126 @@ def ParseAudioTracks(d):
                 yield AudioTrack(number, lang, codec, channels,
                     iso639_2, extras)
             else:
-                warn('Cannot parse audio track fields %r' % field_string)
+                warn(f"Cannot parse audio track fields {field_string!r}")
         else:
-            warn('Cannot parse audio track info %r' % info)
+            warn(f"Cannot parse audio track info {info!r}")
 
-SubtitleTrack = namedtuple('SubtitleTrack',
-        'number info')
+SubtitleTrack = namedtuple("SubtitleTrack",
+        "number info")
 
 def ParseSubtitleTracks(d):
-    for number, info in sorted(((int(n), info) for (n, info) in d.items())):
+    for number, info in sorted((int(n), info) for (n, info) in d.items()):
         yield SubtitleTrack(number, info)
 
 def RenderBar(start, length, total, width):
     end = start + length
     start = int(round(start * (width - 1) / total))
     length = int(round(end * (width - 1) / total)) - start + 1
-    return ('‥' * start +
-            '■' * length +
-            '‥' * (width - start - length))
+    return ("‥" * start +
+            "■" * length +
+            "‥" * (width - start - length))
 
 MAX_BAR_WIDTH = 50
 
-def DisplayScan(titles):
+def DisplayScan(titles) -> None:
     max_title_seconds = max(
-                    title.info['duration'].in_seconds()
+                    title.info["duration"].in_seconds()
                     for title in titles)
 
     for title in titles:
         info = title.info
-        size = ParseSize(info['size'])
+        size = ParseSize(info["size"])
         xaspect, yaspect = ComputeAspectRatio(size)
-        duration = info['duration']
+        duration = info["duration"]
         title_seconds = duration.in_seconds()
-        print('Title % 3d/% 3d: %s  %d×%d  %d:%d  %3g fps' %
+        print("Title % 3d/% 3d: %s  %d×%d  %d:%d  %3g fps" %
                 (title.number, len(titles), duration, size.width,
                     size.height, xaspect, yaspect, size.fps))
-        for at in ParseAudioTracks(info['audio tracks']):
-            print('  audio % 3d: %s (%sch)  [%s]' %
+        for at in ParseAudioTracks(info["audio tracks"]):
+            print("  audio % 3d: %s (%sch)  [%s]" %
                     (at.number, at.lang, at.channels, at.extras))
-        for sub in ParseSubtitleTracks(info['subtitle tracks']):
-            print('  sub % 3d: %s' %
+        for sub in ParseSubtitleTracks(info["subtitle tracks"]):
+            print("  sub % 3d: %s" %
                     (sub.number, sub.info))
         position = 0
         if title_seconds > 0:
-            for chapter in ParseChapters(info['chapters']):
+            for chapter in ParseChapters(info["chapters"]):
                 seconds = chapter.duration.in_seconds()
                 bar_width = int(round(
                     MAX_BAR_WIDTH * title_seconds / max_title_seconds))
                 bar = RenderBar(position, seconds, title_seconds, bar_width)
-                print('  chapter % 3d: %s ◖%s◗'
+                print("  chapter % 3d: %s ◖%s◗"
                         % (chapter.number, chapter.duration, bar))
                 position += seconds
         print()
 
 def ParseArgs():
-    description, epilog = __doc__.strip().split('\n', 1)
+    description, epilog = __doc__.strip().split("\n", 1)
     parser = argparse.ArgumentParser(description=description, epilog=epilog,
             formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-v', '--verbose',
-            action='store_true',
+    parser.add_argument("-v", "--verbose",
+            action="store_true",
             help="Increase verbosity.")
-    parser.add_argument('-c', '--chapter_split',
-            action='store_true',
+    parser.add_argument("-c", "--chapter_split",
+            action="store_true",
             help="Split each chapter out into a separate file.")
-    parser.add_argument('-n', '--dry-run',
-            action='store_true',
+    parser.add_argument("-n", "--dry-run",
+            action="store_true",
             help="Don't actually write anything.")
-    parser.add_argument('--scan',
-            action='store_true',
+    parser.add_argument("--scan",
+            action="store_true",
             help="Display scan of disc; do not rip.")
-    parser.add_argument('--main-feature',
-            action='store_true',
+    parser.add_argument("--main-feature",
+            action="store_true",
             help="Rip only the main feature title.")
-    parser.add_argument('-t', '--titles',
+    parser.add_argument("-t", "--titles",
             default="*",
             help="""Comma-separated list of title numbers to consider
             (starting at 1) or * for all titles.""")
-    parser.add_argument('-i', '--input',
+    parser.add_argument("-i", "--input",
             help="Volume to rip (must be a directory).", required=True)
-    parser.add_argument('-o', '--output',
+    parser.add_argument("-o", "--output",
             help="""Output location. Extension is added if only one title
             being ripped, otherwise, a directory will be created to contain
             ripped titles.""")
-    parser.add_argument('--mount-timeout',
+    parser.add_argument("--mount-timeout",
             default=15,
             help="Amount of time to wait for a mountpoint to be mounted",
             type=float)
     args = parser.parse_args()
     if not args.scan and args.output is None:
-        raise UserError("output argument is required")
+        msg = "output argument is required"
+        raise UserError(msg)
     return args
 
 # TODO: make it possible to have ranges with no end (meaning they end at last
 # title)
-NUM_RANGE_REGEX = re.compile(r'^(\d*)-(\d+)|(\d+)$')
+NUM_RANGE_REGEX = re.compile(r"^(\d*)-(\d+)|(\d+)$")
 def parse_titles_arg(titles_arg):
-    if titles_arg == '*':
+    if titles_arg == "*":
         return None # all titles
-    else:
-        def str_to_ints(s):
-            m = NUM_RANGE_REGEX.match(s)
-            if not m :
-                raise UserError(
-                    "--titles must be * or list of integer ranges, found %r" %
-                    titles_arg)
-            else:
-                start,end,only = m.groups()
-                if only is not None:
-                    return [int(only)]
-                else:
-                    start = int(start) if start else 1
-                    end = int(end)
-                    return range(start, end + 1)
-        result = set()
-        for s in titles_arg.split(','):
-            result.update(str_to_ints(s))
-        result = sorted(list(result))
-        return result
+    def str_to_ints(s):
+        m = NUM_RANGE_REGEX.match(s)
+        if not m :
+            msg = f"--titles must be * or list of integer ranges, found {titles_arg!r}"
+            raise UserError(
+                msg)
+        start,end,only = m.groups()
+        if only is not None:
+            return [int(only)]
+        start = int(start) if start else 1
+        end = int(end)
+        return range(start, end + 1)
+    result = set()
+    for s in titles_arg.split(","):
+        result.update(str_to_ints(s))
+    result = sorted(result)
+    return result
 
-def main():
+def main() -> None:
     args = ParseArgs()
     dvd = DVD(args.input, args.verbose, args.mount_timeout)
-    print('Reading from %r' % dvd.mountpoint)
+    print(f"Reading from {dvd.mountpoint!r}")
     title_numbers = parse_titles_arg(args.titles)
     titles = tuple(dvd.ScanTitles(title_numbers, args.verbose))
 
@@ -665,39 +658,40 @@ def main():
             titles = [FindMainFeature(titles, args.verbose)]
 
         if not titles:
-            raise UserError("No titles to rip")
-        else:
-            if not args.output:
-                raise UserError("No output specified")
-            print('Writing to %r' % args.output)
-            tasks = tuple(ConstructTasks(titles, args.chapter_split))
+            msg = "No titles to rip"
+            raise UserError(msg)
+        if not args.output:
+            msg = "No output specified"
+            raise UserError(msg)
+        print(f"Writing to {args.output!r}")
+        tasks = tuple(ConstructTasks(titles, args.chapter_split))
 
-            filenames = TaskFilenames(tasks, args.output, dry_run=args.dry_run)
-            # Don't stomp on existing files
-            for filename in filenames:
-                if os.path.exists(filename):
-                    raise UserError('%r already exists' % filename)
+        filenames = TaskFilenames(tasks, args.output, dry_run=args.dry_run)
+        # Don't stomp on existing files
+        for filename in filenames:
+            if os.path.exists(filename):
+                msg = f"{filename!r} already exists"
+                raise UserError(msg)
 
-            PerformTasks(dvd, tasks, len(titles), filenames,
-                    dry_run=args.dry_run, verbose=args.verbose)
+        PerformTasks(dvd, tasks, len(titles), filenames,
+                dry_run=args.dry_run, verbose=args.verbose)
 
-            print('=' * 78)
-            if not args.dry_run:
-                dvd.Eject()
+        print("=" * 78)
+        if not args.dry_run:
+            dvd.Eject()
 
-def warn(msg):
-        print('warning: %s' % (msg,), file=sys.stderr)
+def warn(msg) -> None:
+        print(f"warning: {msg}", file=sys.stderr)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     error = None
     try:
         main()
     except FileExistsError as exc:
-        error = '%s: %r' % (exc.strerror, exc.filename)
+        error = f"{exc.strerror}: {exc.filename!r}"
     except UserError as exc:
         error = exc.message
 
     if error is not None:
-        print('%s: error: %s'
-                % (os.path.basename(sys.argv[0]), error), file=sys.stderr)
+        print(f"{os.path.basename(sys.argv[0])}: error: {error}", file=sys.stderr)
         sys.exit(1)
