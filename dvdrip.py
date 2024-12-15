@@ -293,24 +293,12 @@ class DVD:
         self.mountpoint = mountpoint
         self.verbose = verbose
 
-    def RipTitle(
-        self, task: Task, output: str, first_audio: str | None = None, *, dry_run: bool, verbose: bool
-    ) -> None:
+    def RipTitle(self, task: Task, output: str, *, dry_run: bool, verbose: bool) -> None:
         if verbose:
             print("Title Scan:")
             pprint(task.title.info)
             print("-" * 78)
 
-        audio_tracks = task.title.info["audio tracks"]
-        audio_tracks = {
-            value.iso639_2: id_ for id_, value in zip(audio_tracks.keys(), ParseAudioTracks(audio_tracks), strict=False)
-        }
-        audio_keys = []
-        if first_audio and first_audio in audio_tracks:
-            audio_keys.append(audio_tracks.pop(first_audio))
-        audio_keys += audio_tracks.values()
-
-        audio_encoders = ["ca_aac"] * len(audio_tracks)
         subtitles = task.title.info["subtitle tracks"].keys()
 
         args = [
@@ -321,10 +309,7 @@ class DVD:
             "Production Standard",
             "--encoder",
             "x264",
-            "--audio",
-            ",".join(audio_keys),
-            "--aencoder",
-            ",".join(audio_encoders),
+            "--all-audio",
         ]
         if task.chapter is not None:
             args += [
@@ -465,20 +450,20 @@ def ConstructTasks(titles, chapter_split):
             yield Task(title, None)
 
 
-def TaskFilenames(tasks, output, dry_run=False):
+def TaskFilenames(tasks: list[Task], output, format: str = "mp4", *, dry_run=False):
     if len(tasks) > 1:
 
         def ComputeFileName(task):
             if task.chapter is None:
-                return os.path.join(output, "Title%02d.mp4" % task.title.number)
-            return os.path.join(output, "Title%02d_%02d.mp4" % (task.title.number, task.chapter))
+                return os.path.join(output, f"Title{task.title.number:02d}.{format}")
+            return os.path.join(output, f"Title{task.title.number:02d}_{task.chapter:02d}.{format}")
 
         if not dry_run:
             os.makedirs(output)
     else:
 
         def ComputeFileName(task) -> str:
-            return f"{output}.mp4"
+            return f"{output}.{format}"
 
     result = [ComputeFileName(task) for task in tasks]
     if len(set(result)) != len(result):
